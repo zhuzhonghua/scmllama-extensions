@@ -1,0 +1,17 @@
+; scmllama.gdextension — maps the extension library into Godot 4.
+;
+; Built by this repo's CMake (target scmllama_gdextension). The default output
+; is addons/scmllama/bin/ next to this file; override it with
+; SCMLLAMA_GDENGINE_OUTPUT_DIR to write straight into a game project.
+;
+; Godot's ConfigFile parser only accepts ';' comments, not '#'.
+
+[configuration]
+
+entry_symbol = "scmllama_library_init"
+compatibility_minimum = "4.5"
+
+[libraries]
+
+macos.debug = "res://addons/scmllama/bin/libscmllama_gdextension.dylib"
+macos.release = "res://addons/scmllama/bin/libscmllama_gdextension.dylib"
