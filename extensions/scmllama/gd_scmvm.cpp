@@ -21,6 +21,8 @@
 
 #include <string>
 #include <vector>
+#include <deque>
+#include <mutex>
 
 namespace godot {
 
@@ -58,6 +60,44 @@ struct GdRoots {
 
 static const int kGdMaxArgs = 32;
 
+// ---- streaming queue ---------------------------------------------------------
+//
+// The Scheme generation callback (running on whatever thread owns the VM)
+// pushes token pieces here via the registered native fn `llm-stream-push`;
+// Godot drains them with ScmLlama::stream_poll() from any thread (the game's
+// main thread in practice). Owner-free on purpose: the VM may be created and
+// destroyed on a worker thread while the UI polls.
+static std::mutex g_stream_mutex;
+static std::deque<std::string> g_stream;
+
+static ValueT scmllama_stub_llm_stream_push(VM* vm, ValueT* a) {
+  if (scm_is_string(vm, a)) {
+    int len = 0;
+    const char* s = scm_get_string(vm, a, &len);
+    std::lock_guard<std::mutex> lock(g_stream_mutex);
+    g_stream.push_back(std::string(s, (size_t)len));
+  }
+  return scm_make_bool(vm, true);
+}
+
+void ScmLlama::stream_register(VM* vm) {
+  static const RegCProc stream_lib[] = {
+    RegCProc("llm-stream-push", scmllama_stub_llm_stream_push),
+    RegCProc(NULL, -1),
+  };
+  scm_register_lib(vm, stream_lib);
+}
+
+PackedStringArray ScmLlama::stream_poll() {
+  PackedStringArray out;
+  std::lock_guard<std::mutex> lock(g_stream_mutex);
+  while (!g_stream.empty()) {
+    out.push_back(String::utf8(g_stream.front().c_str()));
+    g_stream.pop_front();
+  }
+  return out;
+}
+
 // ---- lifecycle --------------------------------------------------------------
 
 ScmLlama::ScmLlama() {
@@ -67,7 +107,11 @@ ScmLlama::ScmLlama() {
     UtilityFunctions::push_error("[scmllama] failed to create Scheme VM / llama runtime");
     delete runtime_;
     runtime_ = nullptr;
+    return;
   }
+  // Token streaming: register `llm-stream-push` so Scheme callbacks can hand
+  // pieces to the UI while a generation is still in flight.
+  stream_register(runtime_->vm());
 }
 
 ScmLlama::~ScmLlama() {
@@ -397,6 +441,8 @@ void ScmLlama::_bind_methods() {
   ClassDB::bind_method(D_METHOD("call_fn0", "name"), &ScmLlama::call_fn0);
   ClassDB::bind_method(D_METHOD("call_fn", "name", "args"), &ScmLlama::call_fn);
   ClassDB::bind_method(D_METHOD("set_global", "name", "value"), &ScmLlama::set_global);
+  ClassDB::bind_static_method("ScmLlama", D_METHOD("stream_poll"),
+                              &ScmLlama::stream_poll);
 }
 
 } // namespace godot

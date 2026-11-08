@@ -53,12 +53,26 @@ public:
   // Direct global set (GC-safe: values are rooted during conversion).
   void set_global(const String& name, const Variant& value);
 
+  // ---- streaming channel (token-level, worker -> main) ------------------
+  //
+  // Scheme side calls the native fn `llm-stream-push` inside llm-generate's
+  // per-token callback; pieces land in a mutex-guarded queue owned by this
+  // class. The main thread drains it whenever it wants — conceptually the
+  // same message shape as game_bridge's RPC queue, so a later server-based
+  // host can keep the pattern (poll a stream endpoint instead).
+  //
+  // Safe to call from any thread; never touches the VM.
+  static PackedStringArray stream_poll();
+
 private:
   Variant scheme_to_variant(Scheme::VM* vm, Scheme::ValueT* v);
   // Converts `value` into the rooted slot `out`; roots are created
   // RAII-style (Scheme::StkVar) inside the call tree.
   bool variant_to_scheme(Scheme::VM* vm, const Variant& value,
                          Scheme::ValueT* out);
+
+  // Registers `llm-stream-push` into the VM's global env (streaming channel).
+  static void stream_register(Scheme::VM* vm);
 };
 
 } // namespace godot
