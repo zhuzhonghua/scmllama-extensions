@@ -83,4 +83,39 @@ set(SCMLLAMA_GDENGINE_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/addons/scmllama/bi
 
 set_target_properties(scmllama_gdextension PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${SCMLLAMA_GDENGINE_OUTPUT_DIR}
-    PREFIX "lib")
+    PREFIX "lib"
+    # Do not bake this machine's build/bin into the addon. The extension and
+    # the bundled llama/ggml dylibs resolve each other via @loader_path.
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "@loader_path")
+
+# ---------------------------------------------------------------------------
+# macOS: bundle the llama.cpp/ggml runtime dylibs next to the extension.
+# The addons/ folder must be copyable to another machine; an absolute rpath to
+# this build tree would break the moment the project is moved or shipped.
+# ---------------------------------------------------------------------------
+if(APPLE)
+  set(_scmllama_runtime_targets
+      llama
+      ggml
+      ggml-base
+      ggml-cpu
+      ggml-blas
+      ggml-metal)
+  set(_scmllama_runtime_files "")
+  foreach(_target IN LISTS _scmllama_runtime_targets)
+    if(TARGET ${_target})
+      list(APPEND _scmllama_runtime_files "$<TARGET_FILE:${_target}>")
+    endif()
+  endforeach()
+
+  add_custom_command(TARGET scmllama_gdextension POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+        -DOUT_DIR=${SCMLLAMA_GDENGINE_OUTPUT_DIR}
+        -DEXTENSION=$<TARGET_FILE:scmllama_gdextension>
+        -DRUNTIME_DIR=$<TARGET_FILE_DIR:llama>
+        "-DRUNTIME_FILES=${_scmllama_runtime_files}"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/bundle_addon_runtime.cmake
+    COMMENT "Bundling llama.cpp runtime libraries into the addon"
+    VERBATIM)
+endif()

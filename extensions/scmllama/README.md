@@ -59,8 +59,15 @@ directly, configure with:
 ```
 theford/addons/scmllama/
 ├── scmllama.gdextension      # entry_symbol = scmllama_library_init
-└── bin/libscmllama_gdextension.dylib
+└── bin/
+    ├── libscmllama_gdextension.dylib
+    ├── libllama.0.dylib
+    └── libggml*.dylib        # llama.cpp/ggml runtime, bundled on macOS
 ```
+
+On macOS the build copies the `llama`/`ggml` dylibs next to the extension and
+rewrites their LC_RPATH to `@loader_path` (then ad-hoc signs them), so the
+`addons/scmllama/` folder works after being moved to another machine.
 
 The host `scmllama` executable and its unit tests stay in the upstream repo;
 this repo does not duplicate them.

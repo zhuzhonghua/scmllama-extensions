@@ -26,9 +26,11 @@ version pinning, and platform artifacts live here.
 - **Reproducible builds**: scmllama, its `llama.cpp` and `dummyscheme`
   submodules, and `godot-cpp` are all pinned by commit. The extension keeps C++
   exception handling enabled because scmllama reports errors via exceptions.
-- **Drop-in output**: the build emits `libscmllama_gdextension` plus a
-  `.gdextension` manifest (entry symbol `scmllama_library_init`), forming an
-  `addons/scmllama/` folder that any Godot project can copy in.
+- **Drop-in output**: the build emits `libscmllama_gdextension`, the
+  `llama`/`ggml` runtime dylibs it links (macOS), and a `.gdextension` manifest
+  (entry symbol `scmllama_library_init`), forming an `addons/scmllama/` folder
+  that any Godot project can copy in. Runtime paths use `@loader_path`, so the
+  folder is relocatable and does not depend on the build tree.
 - **Room to grow**: the core library and each extension are separate CMake
   targets, so future extensions can share scmllama without touching this repo's
   root build logic.
